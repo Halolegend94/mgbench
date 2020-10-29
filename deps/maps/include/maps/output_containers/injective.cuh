@@ -130,8 +130,8 @@ namespace maps
             {
                 if (grid_dims.x + grid_dims.y + grid_dims.z > 3)
                 {
-                    unsigned int __realBlockIdx;
-                    asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
+                    unsigned int __realBlockIdx = blockIdx.x;
+                    //asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
 
                     blockId.x = __realBlockIdx % grid_dims.x;
                     blockId.y = (__realBlockIdx / grid_dims.x) % grid_dims.y;
@@ -139,7 +139,8 @@ namespace maps
                 }
                 else
                 {
-                    blockId = blockIdx;
+		    blockId = uint3(blockIdx.x, blockIdx.y, blockIdx.z);
+
                 }
             }
         }

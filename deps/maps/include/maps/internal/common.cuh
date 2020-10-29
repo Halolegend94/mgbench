@@ -1,3 +1,4 @@
+#include "hip/hip_runtime.h"
 // MAPS - Memory Access Pattern Specification Framework
 // http://maps-gpu.github.io/
 // Copyright (c) 2015, A. Barak
@@ -30,7 +31,7 @@
 #ifndef __MAPS_COMMON_CUH_
 #define __MAPS_COMMON_CUH_
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <iterator>
 #include "common.h"
 
@@ -63,13 +64,13 @@ namespace maps
 
         __device__ __forceinline__ T *ptr()
         {
-            extern __shared__ unsigned char __smem[];
+            HIP_DYNAMIC_SHARED( unsigned char, __smem)
             return (T *)(__smem + m_offset);
         }
 
         __device__ __forceinline__ const T *ptr() const
         {
-            extern __shared__ unsigned char __smem[];
+            HIP_DYNAMIC_SHARED( unsigned char, __smem)
             return (const T *)(__smem + m_offset);
         }
     };
@@ -100,7 +101,7 @@ namespace maps
 
         __device__ __forceinline__ void init(ptrdiff_t offset = 0)
         {
-            extern __shared__ unsigned char __smem[];
+            HIP_DYNAMIC_SHARED( unsigned char, __smem)
             smem = (T *)(__smem + offset);
         }
     };

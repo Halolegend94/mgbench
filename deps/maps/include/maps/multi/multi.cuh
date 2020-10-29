@@ -34,7 +34,7 @@
 #ifndef __MAPS_MULTI_CUH
 #define __MAPS_MULTI_CUH
 
-#include <cuda_runtime.h>  // For dim3
+#include <hip/hip_runtime.h>  // For dim3
 #include <iostream>
 
 #include "scheduler.h"

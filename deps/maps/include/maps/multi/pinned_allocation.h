@@ -53,15 +53,15 @@ namespace maps {
                 return nullptr;
 
             pointer p;
-            cudaError_t err = cudaMallocHost(&p, n * sizeof(T));
-            if (err == cudaSuccess)
+            hipError_t err = hipHostMalloc(&p, n * sizeof(T));
+            if (err == hipSuccess)
                 return p;
             return nullptr;
         }
 
         void deallocate(pointer p, size_type n)
         {
-            cudaFreeHost(p);
+            hipHostFree(p);
             return;
         }
 

@@ -34,7 +34,7 @@
 #include <map>
 #include <memory>
 #include <algorithm>
-#include <cuda_runtime.h> // for dim3
+#include <hip/hip_runtime.h> // for dim3
 
 #include "../internal/common.h"
 #include "datum.h"
@@ -213,9 +213,9 @@ namespace maps
 
             // Scheduler-related information
 
-            std::vector<cudaEvent_t> deps; ///< Events to wait to before copying data to segments
-            std::vector<cudaEvent_t> events;   ///< So that other kernels and copies can wait for this task to finish
-            std::vector<cudaStream_t> streams; ///< So that kernels can be executed independently
+            std::vector<hipEvent_t> deps; ///< Events to wait to before copying data to segments
+            std::vector<hipEvent_t> events;   ///< So that other kernels and copies can wait for this task to finish
+            std::vector<hipStream_t> streams; ///< So that kernels can be executed independently
 
             /// Determines how to segment the task. Points to the index in "outputs" array to segment
             /// with, or -1 if segmentation is performed by blocks.
@@ -228,8 +228,8 @@ namespace maps
         };
 
         /// @brief An unmodified function to be called instead of a kernel in a task. Kernels must run on the given stream,
-        /// and cudaSetDevice must not be called during this routine (unless returned to original state).
-        typedef bool(*routine_t)(void *context, int deviceIdx, cudaStream_t stream,
+        /// and hipSetDevice must not be called during this routine (unless returned to original state).
+        typedef bool(*routine_t)(void *context, int deviceIdx, hipStream_t stream,
                                  const GridSegment& task_segment,
                                  const std::vector<void *>& parameters,
                                  const std::vector<DatumSegment>& container_segments,

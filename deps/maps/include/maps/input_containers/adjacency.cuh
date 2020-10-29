@@ -101,8 +101,9 @@ namespace maps
         {
             if (block_offset > 0)
             {
-                unsigned int __realBlockIdx;
-                asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
+                unsigned int __realBlockIdx = blockIdx.x;
+                //__asm("mov32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
+
                 __realBlockIdx += block_offset;
               
                 blockId.x = __realBlockIdx % grid_dims.x;
@@ -110,7 +111,7 @@ namespace maps
                 blockId.z = ((__realBlockIdx / grid_dims.x) / grid_dims.y);
             }
             else
-                blockId = blockIdx;
+                blockId = uint3(blockIdx.x, blockIdx.y, blockIdx.z);
             
             sdata.init(m_dsmemOffset);
             m_sdata = sdata.smem;

@@ -93,15 +93,15 @@ namespace maps
             GridSegment segmentation;
             std::vector<DatumSegment> container_segments, container_allocation;
 
-            cudaStream_t stream;
-            cudaEvent_t event;
+            hipStream_t stream;
+            hipEvent_t event;
 
             Action() : type(AT_UNINITIALIZED), deviceID(0), src_ptr(nullptr), dst_ptr(nullptr),
                 src_stride_bytes(0), dst_stride_bytes(0), width_bytes(0), otherdims(0),
                 dstDeviceID(0), total_bytes(0), src_datum(nullptr), dst_datum(nullptr),
                 memsetValue(0), kernel_func(nullptr), grid_dims(), block_dims(),
-                dsmem(0), routine(nullptr), context(nullptr), segmentation(), stream((cudaStream_t)0),
-                event((cudaEvent_t)0) { }
+                dsmem(0), routine(nullptr), context(nullptr), segmentation(), stream((hipStream_t)0),
+                event((hipEvent_t)0) { }
 
             ~Action()
             {
@@ -124,45 +124,45 @@ namespace maps
                     return false;
 
                 case AT_SET_DEVICE:
-                    return (cudaSetDevice(this->m_activeGPUs[action.deviceID]) == cudaSuccess);
+                    return (hipSetDevice(this->m_activeGPUs[action.deviceID]) == hipSuccess);
 
                 case AT_COPY_H2D: // 2D
-                    return (cudaMemcpy2DAsync(action.dst_ptr, action.dst_stride_bytes, action.src_ptr, action.src_stride_bytes,
-                        action.width_bytes, action.otherdims, cudaMemcpyHostToDevice, action.stream) == cudaSuccess);
+                    return (hipMemcpy2DAsync(action.dst_ptr, action.dst_stride_bytes, action.src_ptr, action.src_stride_bytes,
+                        action.width_bytes, action.otherdims, hipMemcpyHostToDevice, action.stream) == hipSuccess);
 
                 case AT_COPY_D2D: // 1D
                     if (action.event)
-                        if (cudaStreamWaitEvent(action.stream, action.event, 0) != cudaSuccess)
+                        if (hipStreamWaitEvent(action.stream, action.event, 0) != hipSuccess)
                             return false;
 
-                    return (cudaMemcpyPeerAsync(action.dst_ptr, this->m_activeGPUs[action.dstDeviceID], action.src_ptr,
-                        this->m_activeGPUs[action.deviceID], action.total_bytes, action.stream) == cudaSuccess);
+                    return (hipMemcpyPeerAsync(action.dst_ptr, this->m_activeGPUs[action.dstDeviceID], action.src_ptr,
+                        this->m_activeGPUs[action.deviceID], action.total_bytes, action.stream) == hipSuccess);
 
                 case AT_COPY_D2H_ASYNC: // 2D
                     if (action.event)
-                        if (cudaStreamWaitEvent(action.stream, action.event, 0) != cudaSuccess)
+                        if (hipStreamWaitEvent(action.stream, action.event, 0) != hipSuccess)
                             return false;
 
-                    return (cudaMemcpy2DAsync(action.dst_ptr, action.dst_stride_bytes, action.src_ptr,
+                    return (hipMemcpy2DAsync(action.dst_ptr, action.dst_stride_bytes, action.src_ptr,
                         action.src_stride_bytes, action.width_bytes, action.otherdims,
-                        cudaMemcpyDeviceToHost, action.stream) == cudaSuccess);
+                        hipMemcpyDeviceToHost, action.stream) == hipSuccess);
 
                 case AT_COPY_D2H_SYNC: // 2D
                     if (action.event)
-                        if (cudaStreamWaitEvent(action.stream, action.event, 0) != cudaSuccess)
+                        if (hipStreamWaitEvent(action.stream, action.event, 0) != hipSuccess)
                             return false;
 
-                    return (cudaMemcpy2D(action.dst_ptr, action.dst_stride_bytes, action.src_ptr,
+                    return (hipMemcpy2D(action.dst_ptr, action.dst_stride_bytes, action.src_ptr,
                         action.src_stride_bytes, action.width_bytes, action.otherdims,
-                        cudaMemcpyDeviceToHost) == cudaSuccess);
+                        hipMemcpyDeviceToHost) == hipSuccess);
 
                 case AT_MEMSET_2D:   // 2D
-                    return (cudaMemset2DAsync(action.dst_ptr, action.dst_stride_bytes, action.memsetValue,
-                        action.width_bytes, action.otherdims, action.stream) == cudaSuccess);
+                    return (hipMemset2DAsync(action.dst_ptr, action.dst_stride_bytes, action.memsetValue,
+                        action.width_bytes, action.otherdims, action.stream) == hipSuccess);
 
                 case AT_MEMSET_1D:   // 1D
-                    return (cudaMemsetAsync(action.dst_ptr, action.memsetValue,
-                        action.total_bytes, action.stream) == cudaSuccess);
+                    return (hipMemsetAsync(action.dst_ptr, action.memsetValue,
+                        action.total_bytes, action.stream) == hipSuccess);
 
                 case AT_RUN_KERNEL:
                 {
@@ -175,8 +175,8 @@ namespace maps
                     action.kernel_parameters[1] = &total_grid_dims;
                     action.kernel_parameters[2] = &block_offset;
 
-                    return (cudaLaunchKernel(action.kernel_func, action.segmentation.blocks, action.segmentation.block_dims,
-                        &action.kernel_parameters[0], action.dsmem, action.stream) == cudaSuccess);
+                    return (hipLaunchKernel(action.kernel_func, action.segmentation.blocks, action.segmentation.block_dims,
+                        &action.kernel_parameters[0], action.dsmem, action.stream) == hipSuccess);
                 }
 
                 case AT_RUN_UNMODIFIED:
@@ -185,10 +185,10 @@ namespace maps
                                           action.kernel_parameters, action.container_segments, action.container_allocation);
 
                 case AT_RECORD_EVENT:
-                    return (cudaEventRecord(action.event, action.stream) == cudaSuccess);
+                    return (hipEventRecord(action.event, action.stream) == hipSuccess);
 
                 case AT_STREAM_WAIT_EVENT:
-                    return (cudaStreamWaitEvent(action.stream, action.event, 0) == cudaSuccess);
+                    return (hipStreamWaitEvent(action.stream, action.event, 0) == hipSuccess);
                 }
             }
 
@@ -211,7 +211,7 @@ namespace maps
             }
 
             virtual bool CopyFromHost(int dstDevice, IDatum *datum, const DatumSegment& allocated_seg,
-                                      const DatumSegment& seg, cudaStream_t stream) override
+                                      const DatumSegment& seg, hipStream_t stream) override
             {
                 if (m_bFinalized)
                 {
@@ -295,7 +295,7 @@ namespace maps
 
 
             virtual bool EnqueueCopyToHost(int srcDevice, IDatum *datum, const DatumSegment& allocated_seg,
-                                           const DatumSegment& seg, cudaStream_t stream, bool async = true)
+                                           const DatumSegment& seg, hipStream_t stream, bool async = true)
             {
                 if (m_bFinalized)
                 {
@@ -380,7 +380,7 @@ namespace maps
 
             virtual bool CopySegment(unsigned int srcDevice, unsigned int dstDevice, IDatum *datum,
                                      const DatumSegment& segment_src, const DatumSegment& segment_dst,
-                                     cudaStream_t stream) override
+                                     hipStream_t stream) override
             {
                 if (m_bFinalized)
                 {
@@ -791,7 +791,7 @@ namespace maps
                 {
                     DatumSegment allocated_segment;
 
-                    std::vector<cudaEvent_t> events(loc.entries.size());
+                    std::vector<hipEvent_t> events(loc.entries.size());
 
                     // Copy back to host from each segment, record events in the end
                     for (int i = 0; i < loc.entries.size(); ++i)
@@ -943,7 +943,7 @@ namespace maps
                         return false;
                     }
 
-                    MAPS_CUDA_CHECK(cudaDeviceSynchronize());
+                    MAPS_CUDA_CHECK(hipDeviceSynchronize());
 #endif
                 }
                 return true;

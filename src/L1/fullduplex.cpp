@@ -32,7 +32,7 @@
 
 #include <gflags/gflags.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 DEFINE_uint64(size, 100*1024*1024, "The amount of data to transfer");
 DEFINE_uint64(repetitions, 100, "Number of repetitions to average");
@@ -40,38 +40,38 @@ DEFINE_uint64(repetitions, 100, "Number of repetitions to average");
 DEFINE_int32(from, -1, "Only copy from a single GPU index, or -1 for all");
 DEFINE_int32(to, -1, "Only copy to a single GPU index, or -1 for all");
 
-static void HandleError(const char *file, int line, cudaError_t err)
+static void HandleError(const char *file, int line, hipError_t err)
 {
     printf("ERROR in %s:%d: %s (%d)\n", file, line,
-           cudaGetErrorString(err), err);
+           hipGetErrorString(err), err);
     exit(1);
 }
 
 // CUDA assertions
-#define CUDA_CHECK(err) do { cudaError_t errr = (err); if(errr != cudaSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
+#define CUDA_CHECK(err) do { hipError_t errr = (err); if(errr != hipSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
 
 void CopySegment(int a, int b)
 {
     void *deva_buff = nullptr, *devb_buff = nullptr;
     void *deva_buff2 = nullptr, *devb_buff2 = nullptr;
 
-    cudaStream_t a_stream, b_stream;
+    hipStream_t a_stream, b_stream;
 
     // Allocate buffers
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaMalloc(&deva_buff, FLAGS_size));
-    CUDA_CHECK(cudaMalloc(&deva_buff2, FLAGS_size));
-    CUDA_CHECK(cudaStreamCreateWithFlags(&a_stream, cudaStreamNonBlocking));
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaMalloc(&devb_buff, FLAGS_size));
-    CUDA_CHECK(cudaMalloc(&devb_buff2, FLAGS_size));
-    CUDA_CHECK(cudaStreamCreateWithFlags(&b_stream, cudaStreamNonBlocking));
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipMalloc(&deva_buff, FLAGS_size));
+    CUDA_CHECK(hipMalloc(&deva_buff2, FLAGS_size));
+    CUDA_CHECK(hipStreamCreateWithFlags(&a_stream, hipStreamNonBlocking));
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipMalloc(&devb_buff, FLAGS_size));
+    CUDA_CHECK(hipMalloc(&devb_buff2, FLAGS_size));
+    CUDA_CHECK(hipStreamCreateWithFlags(&b_stream, hipStreamNonBlocking));
 
     // Synchronize devices before copying
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipDeviceSynchronize());
 
     
     
@@ -79,15 +79,15 @@ void CopySegment(int a, int b)
     auto t1 = std::chrono::high_resolution_clock::now();
     for(uint64_t i = 0; i < FLAGS_repetitions; ++i)
     {
-        CUDA_CHECK(cudaMemcpyPeerAsync(devb_buff, b, deva_buff, a,
+        CUDA_CHECK(hipMemcpyPeerAsync(devb_buff, b, deva_buff, a,
                                        FLAGS_size, b_stream));
-        CUDA_CHECK(cudaMemcpyPeerAsync(deva_buff2, a, devb_buff2, b,
+        CUDA_CHECK(hipMemcpyPeerAsync(deva_buff2, a, devb_buff2, b,
                                        FLAGS_size, a_stream));
     }
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipDeviceSynchronize());
     auto t2 = std::chrono::high_resolution_clock::now();
 
     double mstime = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 / FLAGS_repetitions;
@@ -98,14 +98,14 @@ void CopySegment(int a, int b)
     printf("%.2lf MB/s (%lf ms)\n", MBps, mstime);
     
     // Free buffers
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaFree(deva_buff));
-    CUDA_CHECK(cudaFree(deva_buff2));
-    CUDA_CHECK(cudaStreamDestroy(a_stream));
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaFree(devb_buff));
-    CUDA_CHECK(cudaFree(devb_buff2));
-    CUDA_CHECK(cudaStreamDestroy(b_stream));
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipFree(deva_buff));
+    CUDA_CHECK(hipFree(deva_buff2));
+    CUDA_CHECK(hipStreamDestroy(a_stream));
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipFree(devb_buff));
+    CUDA_CHECK(hipFree(devb_buff2));
+    CUDA_CHECK(hipStreamDestroy(b_stream));
 }
 
 
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
     printf("Inter-GPU bi-directional memory exhange test\n");
     
     int ndevs = 0;
-    CUDA_CHECK(cudaGetDeviceCount(&ndevs));
+    CUDA_CHECK(hipGetDeviceCount(&ndevs));
 
     if (FLAGS_from >= ndevs)
     {
@@ -134,10 +134,10 @@ int main(int argc, char **argv)
     // Enable peer-to-peer access       
     for(int i = 0; i < ndevs; ++i)
     {
-        CUDA_CHECK(cudaSetDevice(i));
+        CUDA_CHECK(hipSetDevice(i));
         for(int j = 0; j < ndevs; ++j)
             if (i != j)
-                cudaDeviceEnablePeerAccess(j, 0);
+                hipDeviceEnablePeerAccess(j, 0);
     } 
 
     printf("GPUs: %d\n", ndevs);

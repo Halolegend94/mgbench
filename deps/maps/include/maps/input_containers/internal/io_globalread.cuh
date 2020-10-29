@@ -31,7 +31,7 @@
 #define __MAPS_IO_GLOBALREAD_CUH_
 
 #include "../../internal/common.cuh"
-#include "../../internal/cuda_utils.hpp"
+#include "../../internal/hip_utils.hpp"
 #include "../../internal/texref.cuh"
 #include "../../internal/type_traits.hpp"
 

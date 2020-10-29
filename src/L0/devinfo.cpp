@@ -30,17 +30,17 @@
 #include <cstdlib>
 #include <iostream>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
-static void HandleError(const char *file, int line, cudaError_t err)
+static void HandleError(const char *file, int line, hipError_t err)
 {
     printf("ERROR in %s:%d: %s (%d)\n", file, line,
-           cudaGetErrorString(err), err);
-    cudaGetLastError();
+           hipGetErrorString(err), err);
+    hipGetLastError();
 }
 
 // CUDA assertions
-#define CUDA_CHECK(err) do { cudaError_t errr = (err); if(errr != cudaSuccess) { HandleError(__FILE__, __LINE__, errr); exit(1); } } while(0)
+#define CUDA_CHECK(err) do { hipError_t errr = (err); if(errr != hipSuccess) { HandleError(__FILE__, __LINE__, errr); exit(1); } } while(0)
 
 // Device capability helper macros
 #define CAP(cap) NCAP(cap, cap)
@@ -49,7 +49,7 @@ static void HandleError(const char *file, int line, cudaError_t err)
 int main(int argc, char **argv)
 {
     int ndevs = 0;
-    if (cudaGetDeviceCount(&ndevs) != cudaSuccess)
+    if (hipGetDeviceCount(&ndevs) != hipSuccess)
         return 1;
 
     int gpuid = -1;
@@ -58,12 +58,12 @@ int main(int argc, char **argv)
     }
 
     int version = 0;
-    CUDA_CHECK(cudaDriverGetVersion(&version));
+    CUDA_CHECK(hipDriverGetVersion(&version));
     std::cout << "Driver version: " << (version / 1000) << "."
               << ((version % 100) / 10) << std::endl;
 
     version = 0;
-    CUDA_CHECK(cudaRuntimeGetVersion(&version));
+    CUDA_CHECK(hipRuntimeGetVersion(&version));
     std::cout << "Runtime version: " << (version / 1000) << "."
               << ((version % 100) / 10) << std::endl;
     std::cout << std::endl;
@@ -74,9 +74,9 @@ int main(int argc, char **argv)
         // Skip GPUs
         if (gpuid >= 0 && i != gpuid) continue;
 
-        CUDA_CHECK(cudaSetDevice(i));
-        cudaDeviceProp props;
-        CUDA_CHECK(cudaGetDeviceProperties(&props, i));
+        CUDA_CHECK(hipSetDevice(i));
+        hipDeviceProp_t props;
+        CUDA_CHECK(hipGetDeviceProperties(&props, i));
 
         std::cout << "GPU " << (i + 1) << ": " << props.name << " ("
                   << props.pciDomainID << "/" << props.pciBusID
@@ -93,7 +93,6 @@ int main(int argc, char **argv)
                   << "Warp size: " << props.warpSize << std::endl
                   << "Multiprocessors: " << props.multiProcessorCount
                   << std::endl
-                  << "Copy engines: " << props.asyncEngineCount << std::endl
                   << "Clock rate: " << (props.clockRate / 1e6)
                   << " GHz" << std::endl
                   << "Threads per MP: " << props.maxThreadsPerMultiProcessor
@@ -109,11 +108,9 @@ int main(int argc, char **argv)
                   << "Pitch: " << props.memPitch << " bytes" << std::endl;
 
         std::cout << "Caps: " << NCAP(ECCEnabled, ecc)
-                  << NCAP(deviceOverlap, overlap)
-                  << NCAP(unifiedAddressing, uva)
                   << NCAP(kernelExecTimeoutEnabled, timeout)
                   << CAP(integrated) << NCAP(canMapHostMemory, hostdma)
-                  << CAP(surfaceAlignment) << CAP(tccDriver) << std::endl;
+                  << CAP(tccDriver) << std::endl;
         std::cout << std::endl;
     }
 
@@ -140,7 +137,7 @@ int main(int argc, char **argv)
                 continue;
             }
 
-            cudaDeviceCanAccessPeer(&tmp, i, j);
+            hipDeviceCanAccessPeer(&tmp, i, j);
             printf("%2d ", tmp ? 1 : 0);
         }
         printf("\n");

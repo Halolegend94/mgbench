@@ -34,9 +34,9 @@
 #include <vector>
 #include <map>
 #include <memory>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
-#include "../internal/cuda_utils.hpp"
+#include "../internal/hip_utils.hpp"
 #include "common.h"
 #include "memory_analyzer.h"
 #include "allocator.h"
@@ -164,12 +164,12 @@ namespace maps {
                 const void *m_src;
                 size_t m_spitch;
 
-                cudaStream_t m_stream;
+                hipStream_t m_stream;
 
             public:
 
                 CopyFromHostAction(bool bFill, IDatum *datum, unsigned int gpuid, void *dst, size_t dpitch, int fillValue,
-                                   size_t width, size_t height, const void *src, size_t spitch, cudaStream_t stream)
+                                   size_t width, size_t height, const void *src, size_t spitch, hipStream_t stream)
                     : m_bFill(bFill), m_datum(datum), m_gpuid(gpuid), m_dst(dst), m_dpitch(dpitch), m_fillValue(fillValue),
                     m_width(width), m_height(height), m_src(src), m_spitch(spitch), m_stream(stream)
                 {
@@ -179,13 +179,13 @@ namespace maps {
                 virtual void operator()(Barrier *barrier) override
                 {
                   if (m_bFill)
-                    MAPS_CUDA_CHECK(cudaMemset2DAsync(m_dst, m_dpitch, m_fillValue,
+                    MAPS_CUDA_CHECK(hipMemset2DAsync(m_dst, m_dpitch, m_fillValue,
                                                       m_width, m_height,
                                                       m_stream));
 
                   else // Otherwise, use memcpy
-                    MAPS_CUDA_CHECK(cudaMemcpy2DAsync(m_dst, m_dpitch, m_src, m_spitch,
-                                                      m_width, m_height, cudaMemcpyHostToDevice,
+                    MAPS_CUDA_CHECK(hipMemcpy2DAsync(m_dst, m_dpitch, m_src, m_spitch,
+                                                      m_width, m_height, hipMemcpyHostToDevice,
                                                       m_stream));                
                 }
             };
@@ -252,10 +252,10 @@ namespace maps {
             std::set<IDatum *> m_dataFromGraphs;
 
             /// Event manager. Kept for cleanup
-            std::vector<cudaEvent_t> m_events;
+            std::vector<hipEvent_t> m_events;
 
             /// Stream manager. Kept for cleanup
-            std::vector<cudaStream_t> m_streams;
+            std::vector<hipStream_t> m_streams;
 
             /// Close-to-optimal exchange order between active GPUs
             /// @note Currently in use only by the TaskGraph since the scheduler is now multi-threaded
@@ -276,7 +276,7 @@ namespace maps {
 
                 // Get actual number of GPUs
                 int count = 0;
-                MAPS_CUDA_CHECK(cudaGetDeviceCount(&count));
+                MAPS_CUDA_CHECK(hipGetDeviceCount(&count));
 
                 // Fill with chosen device IDs
                 m_activeGPUs.clear();
@@ -303,15 +303,15 @@ namespace maps {
 
                 // Enable peer-to-peer access
                 int dev = 0;
-                MAPS_CUDA_CHECK(cudaGetDevice(&dev));
+                MAPS_CUDA_CHECK(hipGetDevice(&dev));
                 for (size_t i = 0; i < m_activeGPUs.size(); ++i)
                 {
-                    MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[i]));
+                    MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[i]));
                     for (size_t j = 0; j < m_activeGPUs.size(); ++j)
                         if (m_activeGPUs[i] != m_activeGPUs[j])
-                            cudaDeviceEnablePeerAccess(m_activeGPUs[j], 0);
+                            hipDeviceEnablePeerAccess(m_activeGPUs[j], 0);
                 }
-                MAPS_CUDA_CHECK(cudaSetDevice(dev));
+                MAPS_CUDA_CHECK(hipSetDevice(dev));
 
                 // Reset segments and other scheduler state fields
                 m_analyzer.Reset(m_activeGPUs.size());
@@ -342,14 +342,14 @@ namespace maps {
                 m_events.resize(m_activeGPUs.size());
 
                 int lastDev = 0;
-                cudaGetDevice(&lastDev);
+                hipGetDevice(&lastDev);
 
                 int i = 0;
                 for (unsigned int dev : m_activeGPUs)
                 {
-                    MAPS_CUDA_CHECK(cudaSetDevice(dev));
-                    MAPS_CUDA_CHECK(cudaStreamCreateWithFlags(&m_streams[i], cudaStreamNonBlocking));
-                    MAPS_CUDA_CHECK(cudaEventCreateWithFlags(&m_events[i], cudaEventDisableTiming));
+                    MAPS_CUDA_CHECK(hipSetDevice(dev));
+                    MAPS_CUDA_CHECK(hipStreamCreateWithFlags(&m_streams[i], hipStreamNonBlocking));
+                    MAPS_CUDA_CHECK(hipEventCreateWithFlags(&m_events[i], hipEventDisableTiming));
 
                     ++i;
                 }
@@ -393,7 +393,7 @@ namespace maps {
                 }
 
                 // Restore CUDA context state
-                MAPS_CUDA_CHECK(cudaSetDevice(lastDev));
+                MAPS_CUDA_CHECK(hipSetDevice(lastDev));
             }
 
         public:
@@ -434,12 +434,12 @@ namespace maps {
                 WaitAll();
 
                 // Free events
-                for (cudaEvent_t& event : m_events)
-                    cudaEventDestroy(event);
+                for (hipEvent_t& event : m_events)
+                    hipEventDestroy(event);
 
                 // Free streams
-                for (cudaStream_t& stream : m_streams)
-                    cudaStreamDestroy(stream);
+                for (hipStream_t& stream : m_streams)
+                    hipStreamDestroy(stream);
 
                 // Allocator will free data automatically on destruction
             }
@@ -560,7 +560,7 @@ namespace maps {
             }
 
             virtual bool CopyFromHost(int dstDevice, IDatum *datum, const DatumSegment& allocated_seg,
-                                      const DatumSegment& seg, cudaStream_t stream)
+                                      const DatumSegment& seg, hipStream_t stream)
             {
 #ifndef NDEBUG
                 if (!datum)
@@ -612,16 +612,16 @@ namespace maps {
                 else
                 {
                     // We need to SetDevice only for the main thread
-                    MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[dstDevice]));
+                    MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[dstDevice]));
 
                     // If segment requires us to set memory, use memset
                     if (seg.m_bFill)
-                      MAPS_CUDA_CHECK(cudaMemset2DAsync(dst_ptr, mem_dst.stride_bytes, seg.m_fillValue,
+                      MAPS_CUDA_CHECK(hipMemset2DAsync(dst_ptr, mem_dst.stride_bytes, seg.m_fillValue,
                                                         datum->GetElementSize() * seg.GetDimension(0), otherdims,
                                                         stream));
                     else // Otherwise, use memcpy
-                      MAPS_CUDA_CHECK(cudaMemcpy2DAsync(dst_ptr, mem_dst.stride_bytes, src_ptr, datum->GetHostStrideBytes(),
-                                                        datum->GetElementSize() * seg.GetDimension(0), otherdims, cudaMemcpyHostToDevice,
+                      MAPS_CUDA_CHECK(hipMemcpy2DAsync(dst_ptr, mem_dst.stride_bytes, src_ptr, datum->GetHostStrideBytes(),
+                                                        datum->GetElementSize() * seg.GetDimension(0), otherdims, hipMemcpyHostToDevice,
                                                         stream));
                 }
 
@@ -629,7 +629,7 @@ namespace maps {
             }
 
             virtual bool CopyToHost(int srcDevice, IDatum *datum, const DatumSegment& allocated_seg,
-                                    const DatumSegment& seg, cudaStream_t stream, bool async = true, const DatumSegment& host_allocated_seg = DatumSegment())
+                                    const DatumSegment& seg, hipStream_t stream, bool async = true, const DatumSegment& host_allocated_seg = DatumSegment())
             {
                 bool result = true;
 
@@ -679,23 +679,23 @@ namespace maps {
                 for (unsigned int i = 1; i < seg.GetDimensions(); ++i)
                     otherdims *= seg.GetDimension(i);
 
-                MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[srcDevice]));
+                MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[srcDevice]));
 
-                MAPS_CUDA_CHECK(cudaStreamWaitEvent(stream, m_events[srcDevice], 0));
+                MAPS_CUDA_CHECK(hipStreamWaitEvent(stream, m_events[srcDevice], 0));
 
-                MAPS_CUDA_CHECK(cudaMemcpy2DAsync(dst_ptr, datum->GetHostStrideBytes(), src_ptr, mem_src.stride_bytes,
-                                                  datum->GetElementSize() * seg.GetDimension(0), otherdims, cudaMemcpyDeviceToHost,
+                MAPS_CUDA_CHECK(hipMemcpy2DAsync(dst_ptr, datum->GetHostStrideBytes(), src_ptr, mem_src.stride_bytes,
+                                                  datum->GetElementSize() * seg.GetDimension(0), otherdims, hipMemcpyDeviceToHost,
                                                   stream));
 
                 if (!async)
-                    cudaStreamSynchronize(stream);
+                    hipStreamSynchronize(stream);
 
                 return result;
             }
 
             virtual bool CopySegment(unsigned int srcDevice, unsigned int dstDevice, IDatum *datum,
                                      const DatumSegment& segment_src, const DatumSegment& segment_dst,
-                                     cudaStream_t stream)
+                                     hipStream_t stream)
             {
 #ifndef NDEBUG
                 if (srcDevice == dstDevice)
@@ -781,23 +781,23 @@ namespace maps {
 
                 if (segment_dst.m_bFill)
                 {
-                    MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[dstDevice]));
+                    MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[dstDevice]));
                 }
                 else
                 {
                     // Let the stream wait for the event first
-                    MAPS_CUDA_CHECK(cudaStreamWaitEvent(stream, m_events[srcDevice], 0));
+                    MAPS_CUDA_CHECK(hipStreamWaitEvent(stream, m_events[srcDevice], 0));
                 }
 
                 if (segment_dst.m_bFill) // If segment requires us to set memory, use memset
                 {
-                  MAPS_CUDA_CHECK(cudaMemsetAsync(ptr_dst, segment_dst.m_fillValue,
+                  MAPS_CUDA_CHECK(hipMemsetAsync(ptr_dst, segment_dst.m_fillValue,
                                                   bytes, stream));
                 }
                 else
                 {
                     // TODO(later): Use memcpy3DPeer?
-                    MAPS_CUDA_CHECK(cudaMemcpyPeerAsync(ptr_dst, m_activeGPUs[dstDevice], ptr_src,
+                    MAPS_CUDA_CHECK(hipMemcpyPeerAsync(ptr_dst, m_activeGPUs[dstDevice], ptr_src,
                                                         m_activeGPUs[srcDevice],
                                                         bytes, stream));
                 }
@@ -807,7 +807,7 @@ namespace maps {
 
             virtual void SetDevice(unsigned int gpuID)
             {
-                MAPS_CUDA_CHECK(cudaSetDevice((int)m_activeGPUs[gpuID]));
+                MAPS_CUDA_CHECK(hipSetDevice((int)m_activeGPUs[gpuID]));
             }
 
             virtual void *AllocateBuffer(unsigned int gpuID, IDatum *datum, const DatumSegment& segment, size_t elementSize, size_t& strideBytes)
@@ -819,7 +819,7 @@ namespace maps {
                                       std::vector<void *>& kernel_parameters, size_t dsmem,
                                       const std::vector<DatumSegment>& /*container_segments*/, std::vector<IDatum *>& /*kernel_data*/)
             {
-                cudaError_t err = cudaSuccess;
+                hipError_t err = hipSuccess;
 
                 uint3 block_offset = make_uint3(segmentation.offset, 0, 0);
                 dim3 total_grid_dims = segmentation.total_grid_dims;
@@ -831,19 +831,19 @@ namespace maps {
                 kernel_parameters[2] = &block_offset;
 
                 // Launch the kernel
-                err = cudaLaunchKernel(kernel, segmentation.blocks, segmentation.block_dims,
+                err = hipLaunchKernel(kernel, segmentation.blocks, segmentation.block_dims,
                                        &kernel_parameters[0], dsmem, m_streams[deviceIdx]);
-                if (err != cudaSuccess)
+                if (err != hipSuccess)
                 {
-                    printf("ERROR launching kernel (%d): %s\n", err, cudaGetErrorString(err));
+                    printf("ERROR launching kernel (%d): %s\n", err, hipGetErrorString(err));
                     return false;
                 }
 
 #ifdef _DEBUG
-                err = cudaStreamSynchronize(m_streams[deviceIdx]);
-                if (err != cudaSuccess)
+                err = hipStreamSynchronize(m_streams[deviceIdx]);
+                if (err != hipSuccess)
                 {
-                    printf("ERROR running kernel on GPU %d (%d): %s\n", deviceIdx + 1, err, cudaGetErrorString(err));
+                    printf("ERROR running kernel on GPU %d (%d): %s\n", deviceIdx + 1, err, hipGetErrorString(err));
                     return (taskHandle_t)0;
                 }
 #endif
@@ -870,7 +870,7 @@ namespace maps {
 
             virtual bool RecordEvent(int deviceIdx, int laneIdx = 0)
             {
-                MAPS_CUDA_CHECK(cudaEventRecord(m_events[deviceIdx], m_streams[deviceIdx]));
+                MAPS_CUDA_CHECK(hipEventRecord(m_events[deviceIdx], m_streams[deviceIdx]));
                 return true;
             }
 
@@ -1622,7 +1622,7 @@ namespace maps {
                     {
                         DatumSegment allocated_segment;
 
-                        std::vector<cudaEvent_t> events(loc.entries.size());
+                        std::vector<hipEvent_t> events(loc.entries.size());
                         int i = 0;
 
                         // Copy back to host from each segment, record events in the end
@@ -1634,16 +1634,16 @@ namespace maps {
                                 return false;
                             }
 
-                            MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[entry.first]));
+                            MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[entry.first]));
 
                             if (!async)
-                                MAPS_CUDA_CHECK(cudaEventCreate(&events[i]));
+                                MAPS_CUDA_CHECK(hipEventCreate(&events[i]));
 
                             CopyToHost(entry.first, datum, allocated_segment,
                                        entry.second, m_streams[entry.first], true);
 
                             if (!async)
-                                MAPS_CUDA_CHECK(cudaEventRecord(events[i], m_streams[entry.first]));
+                                MAPS_CUDA_CHECK(hipEventRecord(events[i], m_streams[entry.first]));
                             ++i;
                         }
 
@@ -1651,11 +1651,11 @@ namespace maps {
                         if (!async)
                         {
                             // Wait for all events to arrive
-                            for (cudaEvent_t& ev : events)
+                            for (hipEvent_t& ev : events)
                             {
-                                MAPS_CUDA_CHECK(cudaSetDevice(m_activeGPUs[loc.entries[i].first]));
-                                MAPS_CUDA_CHECK(cudaEventSynchronize(ev));
-                                MAPS_CUDA_CHECK(cudaEventDestroy(ev));
+                                MAPS_CUDA_CHECK(hipSetDevice(m_activeGPUs[loc.entries[i].first]));
+                                MAPS_CUDA_CHECK(hipEventSynchronize(ev));
+                                MAPS_CUDA_CHECK(hipEventDestroy(ev));
                                 ++i;
                             }
                         }

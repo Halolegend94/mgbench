@@ -32,7 +32,7 @@
 
 #include <gflags/gflags.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 DEFINE_uint64(size, 100*1024*1024, "The amount of data to transfer");
 DEFINE_uint64(chunksize, 0, "If not zero, fragments the data into chunksize-byte chunks");
@@ -44,35 +44,35 @@ DEFINE_int32(from, -1, "Only copy from a single GPU index/host (Host is "
 DEFINE_int32(to, -1, "Only copy to a single GPU index/host (Host is "
              "0, GPUs start from 1), or -1 for all");
 
-static void HandleError(const char *file, int line, cudaError_t err)
+static void HandleError(const char *file, int line, hipError_t err)
 {
     printf("ERROR in %s:%d: %s (%d)\n", file, line,
-           cudaGetErrorString(err), err);
+           hipGetErrorString(err), err);
     exit(1);
 }
 
 // CUDA assertions
-#define CUDA_CHECK(err) do { cudaError_t errr = (err); if(errr != cudaSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
+#define CUDA_CHECK(err) do { hipError_t errr = (err); if(errr != hipSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
 
 void CopySegment(int a, int b)
 {
     void *deva_buff = nullptr, *devb_buff = nullptr;
 
     // Allocate buffers
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaMalloc(&deva_buff, FLAGS_size));    
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaMalloc(&devb_buff, FLAGS_size));
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipMalloc(&deva_buff, FLAGS_size));    
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipMalloc(&devb_buff, FLAGS_size));
 
     // Create event (for synced fragmentation)
-    cudaEvent_t cuda_event;
-    CUDA_CHECK(cudaEventCreateWithFlags(&cuda_event, cudaEventDisableTiming));
+    hipEvent_t cuda_event;
+    CUDA_CHECK(hipEventCreateWithFlags(&cuda_event, hipEventDisableTiming));
 
     // Synchronize devices before copying
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipDeviceSynchronize());
 
     size_t chunk_size = ((FLAGS_chunksize == 0) ? FLAGS_size : FLAGS_chunksize);
     int num_chunks = (FLAGS_size + chunk_size - 1) / chunk_size;
@@ -90,7 +90,7 @@ void CopySegment(int a, int b)
             if (chunk == num_chunks - 1)
                 curchunk = chunk_remainder;
 
-            CUDA_CHECK(cudaMemcpyPeerAsync(dstp, b, srcp, a,
+            CUDA_CHECK(hipMemcpyPeerAsync(dstp, b, srcp, a,
                                            curchunk));
 
             dstp += chunk_size;
@@ -98,14 +98,14 @@ void CopySegment(int a, int b)
 
             if (FLAGS_sync_chunks)
             {
-                CUDA_CHECK(cudaEventRecord(cuda_event));
-                CUDA_CHECK(cudaEventSynchronize(cuda_event));
+                CUDA_CHECK(hipEventRecord(cuda_event));
+                CUDA_CHECK(hipEventSynchronize(cuda_event));
             }
         }
-        CUDA_CHECK(cudaSetDevice(a));
-        CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaSetDevice(b));
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(hipSetDevice(a));
+        CUDA_CHECK(hipDeviceSynchronize());
+        CUDA_CHECK(hipSetDevice(b));
+        CUDA_CHECK(hipDeviceSynchronize());
     }
     auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -117,13 +117,13 @@ void CopySegment(int a, int b)
     printf("%.2lf MB/s (%lf ms)\n", MBps, mstime);
     
     // Destroy event
-    CUDA_CHECK(cudaEventDestroy(cuda_event));
+    CUDA_CHECK(hipEventDestroy(cuda_event));
 
     // Free buffers
-    CUDA_CHECK(cudaSetDevice(a));
-    CUDA_CHECK(cudaFree(deva_buff));
-    CUDA_CHECK(cudaSetDevice(b));
-    CUDA_CHECK(cudaFree(devb_buff));
+    CUDA_CHECK(hipSetDevice(a));
+    CUDA_CHECK(hipFree(deva_buff));
+    CUDA_CHECK(hipSetDevice(b));
+    CUDA_CHECK(hipFree(devb_buff));
 }
 
 void CopyHostDevice(int dev, bool d2h)
@@ -131,17 +131,17 @@ void CopyHostDevice(int dev, bool d2h)
     void *dev_buff = nullptr, *host_buff = nullptr;
 
     // Allocate buffers
-    CUDA_CHECK(cudaSetDevice(dev));
-    CUDA_CHECK(cudaMalloc(&dev_buff, FLAGS_size));    
-    CUDA_CHECK(cudaMallocHost(&host_buff, FLAGS_size));
+    CUDA_CHECK(hipSetDevice(dev));
+    CUDA_CHECK(hipMalloc(&dev_buff, FLAGS_size));    
+    CUDA_CHECK(hipHostMalloc(&host_buff, FLAGS_size));
 
     // Create event (for synced fragmentation)
-    cudaEvent_t cuda_event;
-    CUDA_CHECK(cudaEventCreateWithFlags(&cuda_event, cudaEventDisableTiming));
+    hipEvent_t cuda_event;
+    CUDA_CHECK(hipEventCreateWithFlags(&cuda_event, hipEventDisableTiming));
 
     // Synchronize devices before copying
-    CUDA_CHECK(cudaSetDevice(dev));
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipSetDevice(dev));
+    CUDA_CHECK(hipDeviceSynchronize());
 
     size_t chunk_size = ((FLAGS_chunksize == 0) ? FLAGS_size : FLAGS_chunksize);
     int num_chunks = (FLAGS_size + chunk_size - 1) / chunk_size;
@@ -161,13 +161,13 @@ void CopyHostDevice(int dev, bool d2h)
 
             if (d2h)
             {
-                CUDA_CHECK(cudaMemcpyAsync(hostp, devp,
-                                           curchunk, cudaMemcpyDeviceToHost));
+                CUDA_CHECK(hipMemcpyAsync(hostp, devp,
+                                           curchunk, hipMemcpyDeviceToHost));
             }
             else
             {
-                CUDA_CHECK(cudaMemcpyAsync(devp, hostp,
-                                           curchunk, cudaMemcpyHostToDevice));
+                CUDA_CHECK(hipMemcpyAsync(devp, hostp,
+                                           curchunk, hipMemcpyHostToDevice));
             }
 
             devp += chunk_size;
@@ -175,12 +175,12 @@ void CopyHostDevice(int dev, bool d2h)
 
             if (FLAGS_sync_chunks)
             {
-                CUDA_CHECK(cudaEventRecord(cuda_event));
-                CUDA_CHECK(cudaEventSynchronize(cuda_event));
+                CUDA_CHECK(hipEventRecord(cuda_event));
+                CUDA_CHECK(hipEventSynchronize(cuda_event));
             }
         }
-        CUDA_CHECK(cudaSetDevice(dev));
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(hipSetDevice(dev));
+        CUDA_CHECK(hipDeviceSynchronize());
     }
     auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -192,12 +192,12 @@ void CopyHostDevice(int dev, bool d2h)
     printf("%.2lf MB/s (%lf ms)\n", MBps, mstime);
 
     // Destroy event
-    CUDA_CHECK(cudaEventDestroy(cuda_event));
+    CUDA_CHECK(hipEventDestroy(cuda_event));
 
     // Free buffers
-    CUDA_CHECK(cudaSetDevice(dev));
-    CUDA_CHECK(cudaFree(dev_buff));
-    CUDA_CHECK(cudaFreeHost(host_buff));
+    CUDA_CHECK(hipSetDevice(dev));
+    CUDA_CHECK(hipFree(dev_buff));
+    CUDA_CHECK(hipHostFree(host_buff));
 }
 
 
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
     printf("Inter-GPU uni-directional memory transfer test\n");
     
     int ndevs = 0;
-    CUDA_CHECK(cudaGetDeviceCount(&ndevs));
+    CUDA_CHECK(hipGetDeviceCount(&ndevs));
 
     if (FLAGS_from >= (ndevs + 1))
     {
@@ -226,10 +226,10 @@ int main(int argc, char **argv)
     // Enable peer-to-peer access       
     for(int i = 0; i < ndevs; ++i)
     {
-        CUDA_CHECK(cudaSetDevice(i));
+        CUDA_CHECK(hipSetDevice(i));
         for(int j = 0; j < ndevs; ++j)
             if (i != j)
-                cudaDeviceEnablePeerAccess(j, 0);
+                hipDeviceEnablePeerAccess(j, 0);
     } 
 
     printf("GPUs: %d\n", ndevs);

@@ -30,7 +30,7 @@
 #ifndef __MAPS_TEXREF_CUH_
 #define __MAPS_TEXREF_CUH_
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <iterator>
 
 namespace maps
@@ -47,8 +47,8 @@ namespace maps
         template <int TEXTURE_UID>
         struct TexId
         {
-            typedef texture<T, cudaTextureType1D, 
-                            cudaReadModeElementType> TexRefType;
+            typedef texture<T, hipTextureType1D, 
+                            hipReadModeElementType> TexRefType;
             static TexRefType tex;
             
             template<typename DiffType>
@@ -58,23 +58,23 @@ namespace maps
             }
 
             /// Bind texture
-            static __host__ cudaError_t BindTexture(const void *d_in, 
+            static __host__ hipError_t BindTexture(const void *d_in, 
                                                     size_t size)
             {
                 if (d_in)
                 {
-                    cudaChannelFormatDesc tex_desc = cudaCreateChannelDesc<T>();
+                    hipChannelFormatDesc tex_desc = hipCreateChannelDesc<T>();
                     tex.channelDesc = tex_desc;
-                    return cudaBindTexture(NULL, &tex, d_in, &tex_desc, size);
+                    return hipBindTexture(NULL, &tex, d_in, &tex_desc, size);
                 }
 
-                return cudaSuccess;
+                return hipSuccess;
             }
 
             /// Unbind texture
-            static __host__ cudaError_t UnbindTexture()
+            static __host__ hipError_t UnbindTexture()
             {
-                return cudaUnbindTexture(&tex);
+                return hipUnbindTexture(&tex);
             }
         };
     };
@@ -94,8 +94,8 @@ namespace maps
         template <int TEXTURE_UID>
         struct TexId
         {
-            typedef texture<T, cudaTextureType2D, 
-                            cudaReadModeElementType> TexRefType;
+            typedef texture<T, hipTextureType2D, 
+                            hipReadModeElementType> TexRefType;
             static TexRefType tex;
 
             template<typename DiffType>
@@ -105,24 +105,24 @@ namespace maps
             }
 
             /// Bind texture
-            static cudaError_t BindTexture(const void *d_in, size_t width, 
+            static hipError_t BindTexture(const void *d_in, size_t width, 
                                            size_t height, size_t stride)
             {
                 if (d_in)
                 {
-                    cudaChannelFormatDesc tex_desc = cudaCreateChannelDesc<T>();
+                    hipChannelFormatDesc tex_desc = hipCreateChannelDesc<T>();
                     tex.channelDesc = tex_desc;
-                    return cudaBindTexture2D(NULL, &tex, d_in, &tex_desc, 
+                    return hipBindTexture2D(NULL, &tex, d_in, &tex_desc, 
                                              width, height, stride);
                 }
 
-                return cudaSuccess;
+                return hipSuccess;
             }
 
             /// Unbind texture
-            static cudaError_t UnbindTexture()
+            static hipError_t UnbindTexture()
             {
-                return cudaUnbindTexture(&tex);
+                return hipUnbindTexture(&tex);
             }
         };
     };

@@ -32,9 +32,9 @@
 
 #include <vector>
 #include <map>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
-#include "../internal/cuda_utils.hpp"
+#include "../internal/hip_utils.hpp"
 #include "common.h"
 
 namespace maps
@@ -80,14 +80,14 @@ namespace maps
             virtual void *Allocate(unsigned int gpuID, const DatumSegment& segment, size_t elementSize,
                                    size_t& strideBytes)
             {
-                MAPS_CUDA_CHECK(cudaSetDevice((int)gpuID));
+                MAPS_CUDA_CHECK(hipSetDevice((int)gpuID));
 
                 void *ret = nullptr;
                 strideBytes = 0;
 
                 if (segment.GetDimensions() == 1)
                 {
-                    MAPS_CUDA_CHECK(cudaMalloc(&ret, elementSize * segment.GetDimension(0)));
+                    MAPS_CUDA_CHECK(hipMalloc(&ret, elementSize * segment.GetDimension(0)));
 
                     if (ret)
                     {
@@ -103,10 +103,10 @@ namespace maps
                         otherDimensions *= segment.GetDimension(i);
 
                     if (m_bPitchedAllocation)
-                        MAPS_CUDA_CHECK(cudaMallocPitch(&ret, &strideBytes, elementSize * segment.GetDimension(0), otherDimensions));
+                        MAPS_CUDA_CHECK(hipMallocPitch(&ret, &strideBytes, elementSize * segment.GetDimension(0), otherDimensions));
                     else
                     {
-                        MAPS_CUDA_CHECK(cudaMalloc(&ret, elementSize * segment.GetDimension(0) * otherDimensions));
+                        MAPS_CUDA_CHECK(hipMalloc(&ret, elementSize * segment.GetDimension(0) * otherDimensions));
                         strideBytes = elementSize * segment.GetDimension(0);
                     }
 
@@ -123,8 +123,8 @@ namespace maps
 
             virtual bool Deallocate(unsigned int gpuID, void *datum)
             {
-                MAPS_CUDA_CHECK(cudaSetDevice((int)gpuID));
-                MAPS_CUDA_CHECK(cudaFree(datum));
+                MAPS_CUDA_CHECK(hipSetDevice((int)gpuID));
+                MAPS_CUDA_CHECK(hipFree(datum));
 
                 // Remove from allocated buffer list
                 for (auto iter = m_allocatedBuffers[gpuID].begin(),
@@ -144,10 +144,10 @@ namespace maps
                 // Free all buffers
                 for (auto&& dev : m_allocatedBuffers)
                 {
-                    MAPS_CUDA_CHECK(cudaSetDevice((int)dev.first));
+                    MAPS_CUDA_CHECK(hipSetDevice((int)dev.first));
                     for (const auto& datum : dev.second)
                     {
-                        MAPS_CUDA_CHECK(cudaFree(datum));
+                        MAPS_CUDA_CHECK(hipFree(datum));
                     }
                     dev.second.clear();
                 }

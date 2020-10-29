@@ -1,7 +1,7 @@
 MGBench: Multi-GPU Computing Benchmark Suite
 ==========================================
 
-[![Build Status](https://travis-ci.org/tbennun/mgbench.svg?branch=master)](https://travis-ci.org/tbennun/mgbench)
+This fork brings MGBench on AMD hardware.
 
 This set of applications test the performance, bus speed, power efficiency and correctness of a multi-GPU node.
 
@@ -10,10 +10,7 @@ It is comprised of Level-0 tests (diagnostic utilities), Level-1 tests (microben
 Requirements
 ------------
 
-CMake 2.8 or higher.
-
-CUDA 7.0 or higher. If not installed in the default path, make sure to set the `CUDA_BIN_PATH` environment variable to the CUDA root directory (e.g. `/usr/local/cuda-7.0`).
-
+rocm 3.9 or higher.
 
 Instructions
 ------------

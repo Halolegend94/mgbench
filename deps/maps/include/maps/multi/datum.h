@@ -34,7 +34,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
-#include <cuda_runtime.h> // for dim3
+#include <hip/hip_runtime.h> // for dim3
 #include "../internal/common.h"
 
 namespace maps

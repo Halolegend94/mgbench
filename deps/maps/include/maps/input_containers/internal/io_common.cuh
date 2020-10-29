@@ -31,10 +31,10 @@
 #define __MAPS_IO_COMMON_CUH_
 
 #include <type_traits>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "../../internal/common.cuh"
-#include "../../internal/cuda_utils.hpp"
+#include "../../internal/hip_utils.hpp"
 #include "../../internal/type_traits.hpp"
 
 // NOTE: MAKE SURE THAT THERE ARE NO "blockIdx" REFERENCES IN THIS FILE.

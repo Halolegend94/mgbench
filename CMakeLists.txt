@@ -31,8 +31,6 @@ project (mgbench)
 
 ############## DEPENDENCIES ##############
 
-find_package(CUDA 7 REQUIRED)
-
 add_subdirectory(deps/gflags)
 include_directories(${PROJECT_BINARY_DIR}/deps/gflags/include)
 link_directories(${PROJECT_BINARY_DIR}/deps/gflags/lib)
@@ -43,12 +41,10 @@ include_directories(${PROJECT_SOURCE_DIR}/deps/maps/include)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Debug mode")
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-g;-lineinfo;-Xcompiler;-ggdb;-std=c++11)
+  set(HIP_FLAGS -g;-lineinfo;-Xcompiler;-ggdb;-std=c++11)
 else()
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-O3;-DNDEBUG;-Xcompiler;-DNDEBUG;-std=c++11)
+  set(HIP_FLAGS -O3;-DNDEBUG;-Xcompiler;-DNDEBUG;-std=c++11)
 endif()
-
-set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
 # Addresses a bug where code is not compiled as C++11 in non-CUDA code and older g++ versions
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -63,28 +59,28 @@ endif()
 
 # Level 0 (diagnostics)
 
-cuda_add_executable(numgpus src/L0/numgpus.cpp)
-cuda_add_executable(devinfo src/L0/devinfo.cpp)
+add_executable(numgpus src/L0/numgpus.cpp)
+add_executable(devinfo src/L0/devinfo.cpp)
 
 # Level 1 (microbenchmarks)
 
-cuda_add_executable(halfduplex src/L1/halfduplex.cpp)
+add_executable(halfduplex src/L1/halfduplex.cpp)
 target_link_libraries(halfduplex gflags-static ${EXTRA_LIBS})
 
-cuda_add_executable(fullduplex src/L1/fullduplex.cpp)
+add_executable(fullduplex src/L1/fullduplex.cpp)
 target_link_libraries(fullduplex gflags-static ${EXTRA_LIBS})
 
-cuda_add_executable(uva src/L1/uva.cu)
+add_executable(uva src/L1/uva.cpp)
 target_link_libraries(uva gflags-static ${EXTRA_LIBS})
 
-cuda_add_executable(scatter src/L1/scatter.cpp)
+add_executable(scatter src/L1/scatter.cpp)
 target_link_libraries(scatter gflags-static ${EXTRA_LIBS})
 
 # Level 2 (micro-applications)
 
-cuda_add_executable(gol src/L2/gol/golsample.cu src/L2/gol/main.cpp)
+add_executable(gol src/L2/gol/golsample.cpp src/L2/gol/main.cpp)
 target_link_libraries(gol gflags-static ${EXTRA_LIBS})
 
-cuda_add_executable(sgemm src/L2/sgemm/sgemm.cu src/L2/sgemm/main.cpp)
-cuda_add_cublas_to_target(sgemm)
-target_link_libraries(sgemm gflags-static ${EXTRA_LIBS})
+add_executable(sgemm src/L2/sgemm/sgemm.cpp src/L2/sgemm/main.cpp )
+target_link_libraries(sgemm gflags-static hipblas ${EXTRA_LIBS})
+target_link_libraries(sgemm /opt/rocm/rocblas/lib/librocblas.so)

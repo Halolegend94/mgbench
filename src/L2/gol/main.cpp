@@ -33,7 +33,7 @@
 
 #include <gflags/gflags.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 bool TestGoLMAPSMulti(int ngpus);
 
@@ -49,7 +49,7 @@ int main(int argc, char **argv)
     int num_actual_gpus = FLAGS_num_gpus;
     if (num_actual_gpus <= 0)
     {
-        if (cudaGetDeviceCount(&num_actual_gpus) != cudaSuccess)
+        if (hipGetDeviceCount(&num_actual_gpus) != hipSuccess)
         {
             printf("Error %d when getting devices (is CUDA enabled?)\n", num_actual_gpus);
             return 1;
@@ -76,11 +76,11 @@ int main(int argc, char **argv)
 
     printf("Overall: Test %s\n", overall ? "passed" : "FAILED");
 
-    // cudaDeviceReset must be called before exiting in order for profiling and
+    // hipDeviceReset must be called before exiting in order for profiling and
     // tracing tools such as Nsight and Visual Profiler to show complete traces.
-    cudaError_t cudaStatus = cudaDeviceReset();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
+    hipError_t cudaStatus = hipDeviceReset();
+    if (cudaStatus != hipSuccess) {
+        fprintf(stderr, "hipDeviceReset failed!");
         return 3;
     }
 

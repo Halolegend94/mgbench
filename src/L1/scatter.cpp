@@ -33,7 +33,7 @@
 
 #include <gflags/gflags.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include <maps/multi/worker.h> // For barrier
 
@@ -43,26 +43,26 @@ DEFINE_uint64(repetitions, 100, "Number of repetitions to average");
 DEFINE_int32(source, -1, "Source to scatter from/gather to (-1 for host)");
 DEFINE_bool(ring, false, "Use ring topology for broadcasting");
 
-static void HandleError(const char *file, int line, cudaError_t err)
+static void HandleError(const char *file, int line, hipError_t err)
 {
     printf("ERROR in %s:%d: %s (%d)\n", file, line,
-           cudaGetErrorString(err), err);
+           hipGetErrorString(err), err);
     exit(1);
 }
 
 // CUDA assertions
-#define CUDA_CHECK(err) do { cudaError_t errr = (err); if(errr != cudaSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
+#define CUDA_CHECK(err) do { hipError_t errr = (err); if(errr != hipSuccess) { HandleError(__FILE__, __LINE__, errr); } } while(0)
 
 void SetDevice(int dst_dev, int src_dev)
 {
    if (dst_dev >= 0)
    {
-      CUDA_CHECK(cudaSetDevice(dst_dev));
+      CUDA_CHECK(hipSetDevice(dst_dev));
       return;
    }
    if (src_dev >= 0)
    {
-      CUDA_CHECK(cudaSetDevice(src_dev));
+      CUDA_CHECK(hipSetDevice(src_dev));
    }
 }
 
@@ -71,12 +71,12 @@ void *MallocDevice(int dev, size_t size)
    void *buff = nullptr;
    if (dev >= 0)
    {
-      CUDA_CHECK(cudaSetDevice(dev));
-      CUDA_CHECK(cudaMalloc(&buff, size));
+      CUDA_CHECK(hipSetDevice(dev));
+      CUDA_CHECK(hipMalloc(&buff, size));
    }
    else
    {
-      CUDA_CHECK(cudaMallocHost(&buff, size));
+      CUDA_CHECK(hipHostMalloc(&buff, size));
    }
    
    return buff;
@@ -86,34 +86,34 @@ void FreeDevice(int dev, void *buff)
 {
    if (dev >= 0)
    {
-      CUDA_CHECK(cudaSetDevice(dev));
-      CUDA_CHECK(cudaFree(buff));
+      CUDA_CHECK(hipSetDevice(dev));
+      CUDA_CHECK(hipFree(buff));
    }
    else
    {
-      CUDA_CHECK(cudaFreeHost(buff));
+      CUDA_CHECK(hipHostFree(buff));
    }
 }
 
 
 inline void CopyDev2Dev(int dst_dev, void *dst_buff, int src_dev, const void *src_buff,
-                        size_t size, cudaStream_t stream)
+                        size_t size, hipStream_t stream)
 {
    if (dst_dev < 0) // Device to host
    {
-      CUDA_CHECK(cudaMemcpyAsync(dst_buff, src_buff,
-                 size, cudaMemcpyDeviceToHost,
+      CUDA_CHECK(hipMemcpyAsync(dst_buff, src_buff,
+                 size, hipMemcpyDeviceToHost,
                  stream));
    }
    else if (src_dev < 0) // Host to device
    {
-      CUDA_CHECK(cudaMemcpyAsync(dst_buff, src_buff,
-                 size, cudaMemcpyHostToDevice,
+      CUDA_CHECK(hipMemcpyAsync(dst_buff, src_buff,
+                 size, hipMemcpyHostToDevice,
                  stream));
    }
    else // Peer copy
    {
-      CUDA_CHECK(cudaMemcpyPeerAsync(dst_buff, dst_dev, src_buff, src_dev,
+      CUDA_CHECK(hipMemcpyPeerAsync(dst_buff, dst_dev, src_buff, src_dev,
                      size, stream));
    }
 }
@@ -143,23 +143,23 @@ double BroadcastRing(int src_dev, int ndevs)
     ndevs = (int)dst_devs.size();
     
     // Setup streams, events and the destination buffers
-    std::vector<cudaStream_t> streams (ndevs);
-    std::vector<cudaEvent_t> events (ndevs * num_chunks);
+    std::vector<hipStream_t> streams (ndevs);
+    std::vector<hipEvent_t> events (ndevs * num_chunks);
     std::vector<char *> buffers (ndevs);
     #define GET_CHUNK(dev, chunk) (events[(dev) * num_chunks + (chunk)])
     
     for (int i = 0; i < ndevs; ++i)
     {
-        CUDA_CHECK(cudaSetDevice(dst_devs[i]));
+        CUDA_CHECK(hipSetDevice(dst_devs[i]));
 
-        CUDA_CHECK(cudaMalloc(&buffers[i], FLAGS_size));
+        CUDA_CHECK(hipMalloc(&buffers[i], FLAGS_size));
         
-        CUDA_CHECK(cudaStreamCreateWithFlags(&streams[i],
-                                             cudaStreamNonBlocking));
+        CUDA_CHECK(hipStreamCreateWithFlags(&streams[i],
+                                             hipStreamNonBlocking));
         for (int c = 0; c < num_chunks; ++c)
         {
-            CUDA_CHECK(cudaEventCreateWithFlags(&GET_CHUNK(i, c),
-                                                cudaEventDisableTiming));
+            CUDA_CHECK(hipEventCreateWithFlags(&GET_CHUNK(i, c),
+                                                hipEventDisableTiming));
         }
     }
 
@@ -195,13 +195,13 @@ double BroadcastRing(int src_dev, int ndevs)
 
                 if (d > 0)
                 {
-                    CUDA_CHECK(cudaStreamWaitEvent(streams[d],
+                    CUDA_CHECK(hipStreamWaitEvent(streams[d],
                                                    GET_CHUNK(d - 1, chunk), 0));
                 }
                 CopyDev2Dev(dst, buffers[d] + offset,
                             src, src_buff + offset,
                             curchunk, streams[d]);
-                CUDA_CHECK(cudaEventRecord(GET_CHUNK(d, chunk), streams[d]));
+                CUDA_CHECK(hipEventRecord(GET_CHUNK(d, chunk), streams[d]));
             }
 
             
@@ -209,7 +209,7 @@ double BroadcastRing(int src_dev, int ndevs)
         }
 
         // Sync on last event of last device
-        CUDA_CHECK(cudaEventSynchronize(GET_CHUNK(ndevs - 1,
+        CUDA_CHECK(hipEventSynchronize(GET_CHUNK(ndevs - 1,
                                                   num_chunks - 1)));
     }
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -222,14 +222,14 @@ double BroadcastRing(int src_dev, int ndevs)
 
     for (int i = 0; i < ndevs; ++i)
     {
-        CUDA_CHECK(cudaSetDevice(dst_devs[i]));
+        CUDA_CHECK(hipSetDevice(dst_devs[i]));
 
-        CUDA_CHECK(cudaFree(buffers[i]));
+        CUDA_CHECK(hipFree(buffers[i]));
         
-        CUDA_CHECK(cudaStreamDestroy(streams[i]));
+        CUDA_CHECK(hipStreamDestroy(streams[i]));
         for (int c = 0; c < num_chunks; ++c)
         {
-            CUDA_CHECK(cudaEventDestroy(GET_CHUNK(i, c)));
+            CUDA_CHECK(hipEventDestroy(GET_CHUNK(i, c)));
         }
     }
 
@@ -242,7 +242,7 @@ double BroadcastRing(int src_dev, int ndevs)
 double BroadcastOneToAll(int dst_dev, int src_dev, maps::multi::Barrier *bar)
 {
     void *dst_buff = nullptr, *src_buff = nullptr;
-    cudaStream_t stream;
+    hipStream_t stream;
     
     // Allocate buffers
     src_buff = MallocDevice(src_dev, FLAGS_size);
@@ -256,9 +256,9 @@ double BroadcastOneToAll(int dst_dev, int src_dev, maps::multi::Barrier *bar)
     size_t chunk_remainder = FLAGS_size - (num_chunks - 1) * chunk_size;
    
     // Create stream
-    CUDA_CHECK(cudaStreamCreate(&stream));
+    CUDA_CHECK(hipStreamCreate(&stream));
 
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipDeviceSynchronize());
     bar->Sync();
 
   
@@ -280,7 +280,7 @@ double BroadcastOneToAll(int dst_dev, int src_dev, maps::multi::Barrier *bar)
        
     }
     SetDevice(dst_dev, src_dev);
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(hipDeviceSynchronize());
     auto t2 = std::chrono::high_resolution_clock::now();
     
     double mstime = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 / FLAGS_repetitions;
@@ -291,7 +291,7 @@ double BroadcastOneToAll(int dst_dev, int src_dev, maps::multi::Barrier *bar)
     
     // Free stream
     SetDevice(dst_dev, src_dev);
-    CUDA_CHECK(cudaStreamDestroy(stream));
+    CUDA_CHECK(hipStreamDestroy(stream));
     
     return mstime;
 }
@@ -338,7 +338,7 @@ int main(int argc, char **argv)
     printf("Host-GPU memory scatter-gather test\n");
     
     int ndevs = 0;
-    CUDA_CHECK(cudaGetDeviceCount(&ndevs));
+    CUDA_CHECK(hipGetDeviceCount(&ndevs));
 
     printf("GPUs: %d\n", ndevs);
     printf("Data size: %.2f MB\n", (FLAGS_size / 1024.0f / 1024.0f));
@@ -366,10 +366,10 @@ int main(int argc, char **argv)
     // Enable peer-to-peer access       
     for(int i = 0; i < ndevs; ++i)
     {
-        CUDA_CHECK(cudaSetDevice(i));
+        CUDA_CHECK(hipSetDevice(i));
         for(int j = 0; j < ndevs; ++j)
             if (i != j)
-                cudaDeviceEnablePeerAccess(j, 0);
+                hipDeviceEnablePeerAccess(j, 0);
     } 
 
     

@@ -31,7 +31,7 @@
 #define __MAPS_MAPS_CUH_
 
 // Common headers
-#include "internal/cuda_utils.hpp"
+#include "internal/hip_utils.hpp"
 #include "internal/common.cuh"
 #include "input_containers/internal/io_common.cuh"
 #include "input_containers/internal/io_globalread.cuh"

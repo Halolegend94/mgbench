@@ -30,7 +30,7 @@
 #ifndef __MAPS_MULTI_GRAPH_DATUM_H
 #define __MAPS_MULTI_GRAPH_DATUM_H
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <memory>
 #include <vector>
 

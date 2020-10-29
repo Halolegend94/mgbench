@@ -278,8 +278,8 @@ namespace maps
             {
                 if (m_gridWidth > 0)
                 {
-                    unsigned int __realBlockIdx;
-                    asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
+                    unsigned int __realBlockIdx = blockIdx.x;
+                    //asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
                     __realBlockIdx += block_offset;
 
                     offset.x = IPX * BLOCK_WIDTH * 

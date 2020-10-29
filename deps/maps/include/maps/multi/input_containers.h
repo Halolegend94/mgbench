@@ -30,7 +30,7 @@
 #ifndef __MAPS_MULTI_INPUT_CONTAINERS_H
 #define __MAPS_MULTI_INPUT_CONTAINERS_H
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <iterator>
 #include <iostream>
 #include <memory>

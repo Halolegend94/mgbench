@@ -34,7 +34,7 @@
 #include <memory>
 #include <algorithm>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include "../internal/common.h"
 
 namespace maps

@@ -180,8 +180,8 @@ namespace maps
             if (MULTI_GPU)
             {
                 unsigned int __realBlockIdx;
-                asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
-                
+                //asm("mov.b32   %0, %ctaid.x;" : "=r"(__realBlockIdx));
+               	__realBlockIdx = blockIdx.x; 
                 blockId.x = __realBlockIdx % grid_dims.x;
                 blockId.y = (__realBlockIdx / grid_dims.x) % grid_dims.y;
                 blockId.z = ((__realBlockIdx / grid_dims.x) / grid_dims.y);

@@ -27,12 +27,12 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdio>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 int main(int argc, char **argv)
 {
     int ndevs = 0;
-    if (cudaGetDeviceCount(&ndevs) != cudaSuccess)
+    if (hipGetDeviceCount(&ndevs) != hipSuccess)
         ndevs = -1;
     printf("%d\n", ndevs);
     return ndevs == -1;
