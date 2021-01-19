@@ -186,8 +186,7 @@ double BroadcastRing(int src_dev, int ndevs)
               GPU 2:         [  1  ]E[  2  ]E[  3  ]E[  4  ]E
               GPU 3:                 [  1  ]E[  2  ]E[  3  ]E[  4  ]E
              */
-            for (int d = 0; d < ndevs; ++d)
-            {
+            for (int d = 0; d < ndevs; ++d){
                 int src = (d == 0) ? src_dev : dst_devs[d - 1];
                 int dst = dst_devs[d];
                 const char *src_buff = (const char *)((d == 0) ? src_buffer :
