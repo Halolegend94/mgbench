@@ -82,5 +82,4 @@ add_executable(gol src/L2/gol/golsample.cpp src/L2/gol/main.cpp)
 target_link_libraries(gol gflags-static ${EXTRA_LIBS})
 
 add_executable(sgemm src/L2/sgemm/sgemm.cpp src/L2/sgemm/main.cpp )
-target_link_libraries(sgemm gflags-static hipblas ${EXTRA_LIBS})
-target_link_libraries(sgemm /opt/rocm/rocblas/lib/librocblas.so)
+target_link_libraries(sgemm gflags-static rocblas ${EXTRA_LIBS})

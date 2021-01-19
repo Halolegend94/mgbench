@@ -44,7 +44,7 @@
 #include <hip/hip_runtime.h>
 //#include <device_launch_parameters.h>
 //#include <cublasXt.h>
-#include <hipblas.h>
+#include <rocblas.h>
 
 
 #include <maps/maps.cuh>
@@ -71,9 +71,9 @@ DEFINE_int32(gpuoffset, 0, "Offset the first used GPU ID");
 DEFINE_bool(scaling, false, "Scaling test mode");
 
 #define CUBLAS_CHECK(expr) do {                                                    \
-    hipblasStatus_t status;                                                        \
+    rocblas_status status;                                                        \
     status = (expr);                                                            \
-    if (status != HIPBLAS_STATUS_SUCCESS)                                        \
+    if (status != rocblas_status_success)                                        \
     {                                                                            \
         printf("%s:%d: CUBLAS failed (%d)\n", __FILE__, __LINE__, (int)status);    \
         return false;                                                            \
@@ -107,9 +107,9 @@ static void simple_gemm(int m, int n, int k, T alpha, const T *A, const T *B,
 }
 
 
-struct GEMMContext
-{
-    std::vector<hipblasHandle_t> handles;
+struct GEMMContext{
+
+    std::vector<rocblas_handle> handles;
 };
 
 template <typename T>
@@ -139,8 +139,8 @@ bool GEMMRoutine<float>(void *context, int deviceIdx, hipStream_t stream,
     n = container_segments[1].m_dimensions[0];
     k = container_segments[2].m_dimensions[1];
 
-    CUBLAS_CHECK(hipblasSetStream(c->handles[deviceIdx], stream));
-    CUBLAS_CHECK(hipblasSgemm(c->handles[deviceIdx], HIPBLAS_OP_N, HIPBLAS_OP_N, m, k, n, &alpha, 
+    CUBLAS_CHECK(rocblas_set_stream(c->handles[deviceIdx], stream));
+    CUBLAS_CHECK(rocblas_sgemm(c->handles[deviceIdx], rocblas_operation_none, rocblas_operation_none, m, k, n, &alpha, 
                  (float *)parameters[0], 
                  container_segments[0].m_stride_bytes / sizeof(float), 
                  (float *)parameters[1], 
@@ -171,8 +171,8 @@ bool GEMMRoutine<double>(void *context, int deviceIdx, hipStream_t stream,
     n = container_segments[1].m_dimensions[0];
     k = container_segments[2].m_dimensions[1];
 
-    CUBLAS_CHECK(hipblasSetStream(c->handles[deviceIdx], stream));
-    CUBLAS_CHECK(hipblasDgemm(c->handles[deviceIdx], HIPBLAS_OP_N, HIPBLAS_OP_N, m, k, n, &alpha, 
+    CUBLAS_CHECK(rocblas_set_stream(c->handles[deviceIdx], stream));
+    CUBLAS_CHECK(rocblas_dgemm(c->handles[deviceIdx], rocblas_operation_none, rocblas_operation_none, m, k, n, &alpha, 
                  (double *)parameters[0],
                  container_segments[0].m_stride_bytes / sizeof(double),
                  (double *)parameters[1],
@@ -212,8 +212,8 @@ bool RunGEMM(int ngpus)
     {
         MAPS_CUDA_CHECK(hipSetDevice(gpuids[k]));
 
-        hipblasHandle_t handle;
-        CUBLAS_CHECK(hipblasCreate(&handle));
+        rocblas_handle handle;
+        CUBLAS_CHECK(rocblas_create_handle(&handle));
         context.handles.push_back(handle);
     }
     
@@ -344,7 +344,7 @@ bool RunGEMM(int ngpus)
     for (int k = 0; k < ngpus; ++k)
     {
         MAPS_CUDA_CHECK(hipSetDevice(gpuids[k]));
-        CUBLAS_CHECK(hipblasDestroy(context.handles[k]));
+        CUBLAS_CHECK(rocblas_destroy_handle(context.handles[k]));
     }
 
     return result;
